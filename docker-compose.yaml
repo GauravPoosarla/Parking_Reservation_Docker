@@ -1,0 +1,119 @@
+version: "3"
+services:
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6380:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - '5673:5672'
+      - '15673:15672'
+
+  authdb:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: auth_users
+    ports:
+      - "5433:5432"
+    volumes:
+      - ../auth/database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authmigration:
+    build: 
+      context: ../parking-reservation-auth
+    depends_on:
+      - authdb
+    command: npx sequelize-cli db:migrate
+    environment:
+      DB_HOST: authdb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: auth_users
+  
+  authserver:
+    build: 
+      context: ../parking-reservation-auth
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - authdb
+      - redis
+      - authmigration
+    ports:
+      - "8081:8080"
+    environment:
+      DB_HOST: authdb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: auth_users
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 8000
+      SECRET_KEY: secret
+
+  backenddb:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: parking_details 
+    ports:
+      - "5434:5432"
+    volumes:
+      - ../backend/database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backendmigration:
+    build: ../parking-reservation-backend
+    depends_on:
+      - backenddb
+    command: npx sequelize-cli db:migrate
+    environment:
+      DB_HOST: backenddb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: parking_details
+
+  backendserver:
+    build: ../parking-reservation-backend
+    restart: always
+    depends_on:
+      - backenddb
+      - backendmigration
+      - rabbitmq
+    ports:
+      - "8001:8000"
+
+    environment:
+      DB_HOST: backenddb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: parking_details
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 8000
+
+  backendworker:
+    build: ../parking-reservation-backend
+    restart: always
+    depends_on:
+      - backendserver
+      - rabbitmq
