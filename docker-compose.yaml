@@ -110,10 +110,21 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PORT: 8000
+      RABBITMQ_URL: amqp://localhost:5672
 
   backendworker:
-    build: ../parking-reservation-backend
+    build:
+      context: ../parking-reservation-backend
+      dockerfile: Dockerfile.worker
     restart: always
     depends_on:
       - backendserver
       - rabbitmq
+    environment:
+      RABBITMQ_URL: amqp://localhost:5672
+      EMAIL: poosarlagaurav@gmail.com
+      CLIENT_ID: 412070502579-v4b7n2l5bvhrv2ks96ov5h2ijk7mgorb.apps.googleusercontent.com
+      CLIENT_SECRET: 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
+      REFRESH_TOKEN: 1//045J7I7qLFnPLCgYIARAAGAQSNwF-L9IrsKwngwt66mJtES03AJ92L-xcsQ5bs102r_sMXoG1QaKaqVbkQwZ1KXCgOOi20n4h6dA
+    
+    
